@@ -35,6 +35,7 @@
 
 #include <mpi.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define ROOT 0 /* Good practice borrowed from estimate_pi.c by Prof. Weiss */
 
@@ -77,6 +78,17 @@ int main(int argc, char* argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &num_p);
 
     /* Check arguments - filename present, seed optional */
+    if((2 != argc) && (3 != argc)) {
+        sprintf(error_string, "Usage: %s <filename> [seed]", argv[0]);
+        terminate(id, error_string);
+    }
+
+    if(3 == argc) {
+        seed = atoi(argv[2]);
+        if(seed <= 0) {
+            terminate(id, "Seed must be a positive integer.");
+        }
+    }
 
     /* Read and distribute incompatibility matrix */
 

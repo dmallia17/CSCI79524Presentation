@@ -21,6 +21,9 @@
                   solution is found. Ultimately, the best solution, i.e. the
                   one that minimizes the cost function, found by any of the
                   processes involved is printed.
+                  PLEASE NOTE: The handling of matrices in this program is
+                  inspired by the mpi_floyd.c program by Professor Weiss,
+                  presented in Chapter 5 of the CSCI 79524 lecture notes.
   Usage:          mpirun -np <N> room <filename> [seed]
                   where N is a positive integer, filename is the name of the
                   incompatibility matrix file, and seed is an optional integer
@@ -38,6 +41,7 @@
 #include <stdlib.h>
 
 #define ROOT 0 /* Good practice borrowed from estimate_pi.c by Prof. Weiss */
+#define MALLOC_ERROR 1
 
 /*
   PLEASE NOTE: this function is borrowed from page 488 of Parallel Programming
@@ -64,6 +68,58 @@ void terminate(int id, char* error_message) {
     exit(-1);
 }
 
+/*
+
+*/
+void read_and_distribute_incompat_matrix(char* filename, int id, int num_p,
+    int* n, int** assignments, double** incompat_storage,
+    double*** incompat_matrix) {
+
+    FILE* matrix_file; /* File handle */
+
+    if(ROOT == id) { /* Only root (0) reads the file. */
+        matrix_file = fopen(filename, "r");
+        if(NULL == matrix_file) {
+            *n = 0;
+        } else {
+            fread(n, sizeof(int), 1, matrix_file);
+        }
+    }
+
+    /* Transmit n to all processes */
+    MPI_Bcast(n, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+
+    /* For debugging */
+    printf("Id %d, n = %d", id, *n);
+
+    /* All terminate if file could not be opened */
+    if(0 == (*n)) {
+        terminate(id, "Could not open matrix file.");
+    }
+
+    /* All quit if n is not an even number */
+    if((*n) % 2 != 0) {
+        terminate(id, "There should be an even number of students.");
+    }
+
+    /* All allocate memory */
+    *assignments = malloc((*n) * sizeof(int));
+    *incompat_storage = malloc(((*n) * (*n)) * sizeof(double));
+    *incompat_matrix = malloc((*n) * sizeof(double*));
+    if((NULL == (*assignments)) || (NULL == (*incompat_storage)) ||
+        (NULL == (*incompat_matrix))) {
+        MPI_Abort(MPI_COMM_WORLD, MALLOC_ERROR);
+    }
+
+    /* Configure incompat_matrix */
+
+
+    if(ROOT == id) { /* Only root (0) reads the file. */
+        fclose(matrix_file);
+    } else { /* All other processes */
+
+    }
+}
 
 int main(int argc, char* argv[]) {
     int id; /* id of current process */
@@ -71,6 +127,11 @@ int main(int argc, char* argv[]) {
     char error_string[127]; /* Buffer for error string if needed */
     int seed = 0; /* Seed for RNG initial state. Zero (default) signals no
                      seeding - i.e. truly "random" behavior. */
+    int n; /* Number of students */
+    int* assignments; /* Array of room assignments */
+    double* incompat_storage; /* Storage for incompatibility matrix */
+    double** incompat_matrix; /* Incompatibility matrix pointers */
+    double solution_cost; /* Cost of proposed solution */
 
     /* Initialize MPI, retrieve process id and total # of processes */
     MPI_Init(&argc, &argv);
@@ -97,6 +158,9 @@ int main(int argc, char* argv[]) {
     /* Determine and print best solution among all processes */
 
     MPI_Finalize();
+    free(assignments);
+    free(incompat_storage);
+    free(incompat_matrix);
 
     return 0;
 }

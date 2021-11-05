@@ -42,6 +42,7 @@
 
 #define ROOT 0 /* Good practice borrowed from estimate_pi.c by Prof. Weiss */
 #define MALLOC_ERROR 1
+#define DEBUG 0
 
 /*
   PLEASE NOTE: this function is borrowed from page 488 of Parallel Programming
@@ -76,6 +77,8 @@ void read_and_distribute_incompat_matrix(char* filename, int id, int num_p,
     double*** incompat_matrix) {
 
     FILE* matrix_file; /* File handle */
+    int i; /* Loop count var */
+    int ncols; /* Used only for checking matrix is square. */
 
     if(ROOT == id) { /* Only root (0) reads the file. */
         matrix_file = fopen(filename, "r");
@@ -83,6 +86,10 @@ void read_and_distribute_incompat_matrix(char* filename, int id, int num_p,
             *n = 0;
         } else {
             fread(n, sizeof(int), 1, matrix_file);
+            fread(&ncols, sizeof(int), 1, matrix_file);
+            if(ncols != (*n)){ /* Matrix not square */
+                *n = 0;
+            }
         }
     }
 
@@ -90,7 +97,9 @@ void read_and_distribute_incompat_matrix(char* filename, int id, int num_p,
     MPI_Bcast(n, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
     /* For debugging */
-    printf("Id %d, n = %d", id, *n);
+    if(DEBUG){
+        printf("Id %d, n = %d\n", id, *n);
+    }
 
     /* All terminate if file could not be opened */
     if(0 == (*n)) {
@@ -112,13 +121,31 @@ void read_and_distribute_incompat_matrix(char* filename, int id, int num_p,
     }
 
     /* Configure incompat_matrix */
-
+    for(i = 0; i < (*n); i++) {
+        (*incompat_matrix)[i] = &((*incompat_storage)[i * (*n)]);
+    }
 
     if(ROOT == id) { /* Only root (0) reads the file. */
+        fread((*incompat_storage), sizeof(double), ((*n) * (*n)), matrix_file);
         fclose(matrix_file);
-    } else { /* All other processes */
-
     }
+
+    /* Share matrix */
+    MPI_Bcast((*incompat_storage), ((*n) * (*n)), MPI_DOUBLE, ROOT,
+        MPI_COMM_WORLD);
+
+    /* For debugging */
+    if(DEBUG) {
+        int j; /* Second loop counter */
+        printf("id: %d\n", id);
+        for(i = 0; i < (*n); i++) {
+            for(j = 0; j < (*n); j++) {
+                printf("%f ", (*incompat_matrix)[i][j]);
+            }
+            printf("\n");
+        }
+    }
+
 }
 
 int main(int argc, char* argv[]) {
@@ -152,6 +179,8 @@ int main(int argc, char* argv[]) {
     }
 
     /* Read and distribute incompatibility matrix */
+    read_and_distribute_incompat_matrix(argv[1], id, num_p, &n, &assignments,
+        &incompat_storage, &incompat_matrix);
 
     /* Conduct simulated annealing */
 

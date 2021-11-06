@@ -39,10 +39,12 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define ROOT 0 /* Good practice borrowed from estimate_pi.c by Prof. Weiss */
 #define MALLOC_ERROR 1
 #define DEBUG 0
+#define LAG_TABLE_SIZE 64
 
 /*
   PLEASE NOTE: this function is borrowed from page 488 of Parallel Programming
@@ -68,6 +70,55 @@ void terminate(int id, char* error_message) {
     MPI_Finalize();
     exit(-1);
 }
+
+/*
+  PLEASE NOTE: This function is inspired by the init_random function provided
+  as an example by Professor Weiss.
+*/
+void init_random_state(int id, int seed) {
+    char* state = malloc(LAG_TABLE_SIZE * sizeof(char));
+    if(NULL == state) {
+        MPI_Abort(MPI_COMM_WORLD, MALLOC_ERROR);
+    }
+
+    if(seed) {
+       initstate(((id + 1) * seed), state, LAG_TABLE_SIZE);
+    } else {
+       initstate(((id + 1) * time(NULL)), state, LAG_TABLE_SIZE);
+    }
+}
+
+/*
+
+*/
+void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
+    double** incompat_matrix, double* solution_cost) {
+
+    double temperature = 10; /* Temperature in the annealing */
+    int fail_count = 0; /* Count of temperatures with insufficient updates */
+    /* This function uses the passed assignments array as the current solution
+    and the passed solution cost as the current cost, therefore only one new
+    array and new double are needed, for tracking the "new" results. */
+    int* new_solution = malloc((n) * sizeof(int));
+    double new_cost;
+
+    if(NULL == new_solution) {
+        MPI_Abort(MPI_COMM_WORLD, MALLOC_ERROR);
+    }
+
+    /* Initialize random number generator */
+    init_random_state(id, seed);
+    if(DEBUG) {
+        printf("id: %d, random number: %ld\n", id, random());
+    }
+
+    /* Initialize to a random room assignment (solution) */
+
+    /* Main loop */
+
+
+}
+
 
 /*
 
@@ -183,6 +234,8 @@ int main(int argc, char* argv[]) {
         &incompat_storage, &incompat_matrix);
 
     /* Conduct simulated annealing */
+    room_asst_sim_anneal(id, seed, n, assignments, incompat_matrix,
+        &solution_cost);
 
     /* Determine and print best solution among all processes */
 

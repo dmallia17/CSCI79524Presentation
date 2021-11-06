@@ -29,7 +29,7 @@
                   incompatibility matrix file, and seed is an optional integer
                   which should be used to seed the random number generator for
                   repeatable behavior. 
-  Build with:     mpicc -Wall -g -o room daniel_mallia_presentation.c
+  Build with:     mpicc -Wall -g -o room daniel_mallia_presentation.c -lm
   Modifications:  None at this time.
   NOTE:           This program expects the incompatibility matrix values to be
                   in the range [0,10] as described by Quinn in Chapter 10 of
@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #define ROOT 0 /* Good practice borrowed from estimate_pi.c by Prof. Weiss */
 #define MALLOC_ERROR 1
@@ -88,6 +89,46 @@ void init_random_state(int id, int seed) {
     }
 }
 
+
+/*
+
+*/
+double get_unif_random() {
+    return (((double) random()) / RAND_MAX);
+}
+
+/*
+
+*/
+void random_solution(int* assignments, int n) {
+
+    int i; /* Loop counter */
+    int room; /* Hold room selections */
+    int num_rooms = n / 2;
+    /* Use calloc to initialize all counts to 0 */
+    int* occupancy = calloc(num_rooms, sizeof(int));
+    if(NULL == occupancy) {
+        MPI_Abort(MPI_COMM_WORLD, MALLOC_ERROR);
+    }
+
+    for(i = 0; i < n; i++) { /* Select a room for each student */
+        room = floor((get_unif_random()) * num_rooms);
+        while(occupancy[room] == 2) { /* Select unoccupied room */
+            room = floor((get_unif_random()) * num_rooms);
+        }
+        assignments[i] = room;
+        occupancy[room]++;
+    }
+
+    if(DEBUG){
+        for(i = 0; i < n; i++) {
+            printf("%d ", assignments[i]);
+        }
+        printf("\n");
+    }
+
+}
+
 /*
 
 */
@@ -113,10 +154,11 @@ void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
     }
 
     /* Initialize to a random room assignment (solution) */
+    random_solution(assignments, n);
 
     /* Main loop */
 
-
+    free(new_solution);
 }
 
 

@@ -31,9 +31,7 @@
                   repeatable behavior. 
   Build with:     mpicc -Wall -g -o room daniel_mallia_presentation.c -lm
   Modifications:  None at this time.
-  NOTE:           This program expects the incompatibility matrix values to be
-                  in the range [0,10] as described by Quinn in Chapter 10 of
-                  Parallel Programming in C with MPI and OpenMP. 
+
 *****************************************************************************/
 
 #include <mpi.h>

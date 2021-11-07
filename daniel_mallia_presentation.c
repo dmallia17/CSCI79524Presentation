@@ -144,6 +144,48 @@ void random_solution(int* assignments, int n) {
 }
 
 /*
+
+*/
+void print_best_solution(int id, int num_p, int n, double solution_cost,
+    int* assignments) {
+    int i; /* Loop counter */
+    int signal; /* Signal to transmit */
+    MPI_Status status; /* Structure for transmission info */
+    int best_solution_id = 0;
+    double best_solution_cost = solution_cost;
+    double temp_solution_cost;
+
+    if(ROOT == id) { /* Root polls all other processes for best results */
+        for(i = 1; i < num_p; i++) {
+            MPI_Send(&signal, 1, MPI_INT, i, 1, MPI_COMM_WORLD);
+            MPI_Recv(&temp_solution_cost, 1, MPI_DOUBLE, i, 1,
+                MPI_COMM_WORLD, &status);
+            if(temp_solution_cost < best_solution_cost) {
+                best_solution_cost = temp_solution_cost;
+                best_solution_id = i;
+            }
+        }
+    } else { /* All other processes wait to send their cost */
+        MPI_Recv(&signal, 1, MPI_INT, ROOT, 1, MPI_COMM_WORLD, &status);
+        MPI_Send(&best_solution_cost, 1, MPI_DOUBLE, ROOT, 1, MPI_COMM_WORLD);
+    }
+
+    /* ROOT sends the id of the process with the best solution */
+    MPI_Bcast(&best_solution_id, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+
+    /* Process with best solution prints the cost and the solution */
+    if(id == best_solution_id) {
+        printf("Process %d found the following solution with cost %f\n",
+            id, solution_cost);
+        for(i = 0; i < n; i++) {
+            printf("%d ", assignments[i]);
+        }
+        printf("\n\n");
+    }
+
+}
+
+/*
   NOTE THAT THIS BASICALLY FOLLOWS FROM PAGE 43 IN LECTURE NOTES
 */
 void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
@@ -360,6 +402,7 @@ int main(int argc, char* argv[]) {
         &solution_cost);
 
     /* Determine and print best solution among all processes */
+    print_best_solution(id, num_p, n, solution_cost, assignments);
 
     MPI_Finalize();
     free(assignments);

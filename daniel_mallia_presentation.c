@@ -91,10 +91,26 @@ void init_random_state(int id, int seed) {
 
 
 /*
-
+  NOTE THE +1 to get [0,1)
 */
 double get_unif_random() {
-    return (((double) random()) / RAND_MAX);
+    return (((double) random()) / (RAND_MAX + 1));
+}
+
+/*
+
+*/
+double cost(int* assignments, int n, double** incompat_matrix) {
+    int i, j; /* Loop counters */
+    double total = 0;
+    for(i = 0; i < n; i++) {
+        for(j = 0; j < n; j++) {
+            if((i != j) && (assignments[i] == assignments[j])) {
+                total += incompat_matrix[i][j];
+            }
+        }
+    }
+    return (total / 2);
 }
 
 /*
@@ -130,18 +146,22 @@ void random_solution(int* assignments, int n) {
 }
 
 /*
-
+  NOTE THAT THIS BASICALLY FOLLOWS FROM PAGE 43 IN LECTURE NOTES
 */
 void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
     double** incompat_matrix, double* solution_cost) {
 
     double temperature = 10; /* Temperature in the annealing */
     int fail_count = 0; /* Count of temperatures with insufficient updates */
-    /* This function uses the passed assignments array as the current solution
-    and the passed solution cost as the current cost, therefore only one new
-    array and new double are needed, for tracking the "new" results. */
-    int* new_solution = malloc((n) * sizeof(int));
-    double new_cost;
+    int acceptance_counter; /* # of times new solution accepted */
+    int number_of_attempts; /* # of times a new solution was tested */
+    int attempt_cap = 100 * n; /* Limit on attempts - calculated once */
+    double u; /* Random number for deciding on accepting worse solution */
+    double p; /* Probability of accepting a worse solution */
+    int s1, s2; /* Students 1 and 2 for swapping */
+    int temp_room; /* Swap variable for room assignments */
+    double delta; /* Change in cost */
+    double new_cost; /* Cost of new solution */
 
     if(NULL == new_solution) {
         MPI_Abort(MPI_COMM_WORLD, MALLOC_ERROR);
@@ -157,8 +177,73 @@ void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
     random_solution(assignments, n);
 
     /* Main loop */
+    while(1) {
+        acceptance_counter = 0;
+        number_of_attempts = 0;
 
-    free(new_solution);
+        while((acceptance_counter < 10) &&
+            (number_of_attempts < attempt_cap)) {
+
+            /* Select two students to swap between rooms */
+            s1 = floor((get_unif_random()) * n);
+            s2 = floor((get_unif_random()) * n);
+
+            /* Check not same student or student not in same room as s1 */
+            while((s1 == s2) || (assignments[s1] == assignments[s2])) {
+                s2 = floor((get_unif_random()) * n);
+            }
+
+            /* Calculate score for current solution */
+            *solution_cost = cost(assignments, n, incompat_matrix);
+
+            /* Swap students */
+            temp_room = assignments[s1];
+            assignments[s1] = assignments[s2];
+            assignments[s2] = temp_room;
+
+            /* Calculate score of new solution */
+            new_cost = cost(assignments, n, incompat_matrix);
+            delta = new_cost - (*solution_cost);
+
+            u = get_unif_random();
+            p = exp((((-1) * delta) / temperature));
+
+            if((delta < 0) || (u < p)) { /* Accept new solution */
+                acceptance_counter++;
+                *solution_cost = new_cost;
+            } else { /* Reject new solution */
+                number_of_attempts++;
+                /* Swap back students */
+                temp_room = assignments[s1];
+                assignments[s1] = assignments[s2];
+                assignments[s2] = temp_room;
+            }
+        }
+
+        if(10 == acceptance_counter) {
+            fail_count = 0;
+        } else {
+            fail_count++;
+            /* Quit if insufficient change in 3 consecutive temperatures */
+            if(3 == fail_count) {
+                break;
+            }
+        }
+
+        /* Decrease temperature and quit if low and change is unlikely */
+        temperature = (0.9 * temperature);
+        if(temperature < 0.001) {
+            break;
+        }
+    }
+
+    if(DEBUG) {
+        printf("id: %d, cost: %f, solution:\n", id, *solution_cost);
+        for(i = 0; i < n; i++) {
+            printf("%d ", assignments[i]);
+        }
+        printf("\n");
+    }
 }
 
 

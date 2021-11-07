@@ -92,7 +92,7 @@ void init_random_state(int id, int seed) {
   NOTE THE +1 to get [0,1)
 */
 double get_unif_random() {
-    return (((double) random()) / (RAND_MAX + 1));
+    return (((double) random()) / (((long) RAND_MAX) + 1));
 }
 
 /*
@@ -160,10 +160,6 @@ void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
     int temp_room; /* Swap variable for room assignments */
     double delta; /* Change in cost */
     double new_cost; /* Cost of new solution */
-
-    if(NULL == new_solution) {
-        MPI_Abort(MPI_COMM_WORLD, MALLOC_ERROR);
-    }
 
     /* Initialize random number generator */
     init_random_state(id, seed);
@@ -236,6 +232,7 @@ void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
     }
 
     if(DEBUG) {
+        int i;
         printf("id: %d, cost: %f, solution:\n", id, *solution_cost);
         for(i = 0; i < n; i++) {
             printf("%d ", assignments[i]);

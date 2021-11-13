@@ -24,11 +24,14 @@
                   PLEASE NOTE: The handling of matrices in this program is
                   inspired by the mpi_floyd.c program by Professor Weiss,
                   presented in Chapter 5 of the CSCI 79524 lecture notes.
+                  Thus it expects a BINARY file of the type output by the
+                  matrix2binary program provided by Professor Weiss, for the
+                  incompatibility matrix file.
   Usage:          mpirun -np <N> room <filename> [seed]
                   where N is a positive integer, filename is the name of the
-                  incompatibility matrix file, and seed is an optional integer
-                  which should be used to seed the random number generator for
-                  repeatable behavior. 
+                  BINARY (see above) incompatibility matrix file, and seed is
+                  an optional integer which should be used to seed the random
+                  number generator for repeatable behavior.
   Build with:     mpicc -Wall -g -o room daniel_mallia_presentation.c -lm
   Modifications:  None at this time.
 
@@ -73,6 +76,22 @@ void terminate(int id, char* error_message) {
 /*
   PLEASE NOTE: This function is inspired by the init_random function provided
   as an example by Professor Weiss.
+  This function initializes the random number generator via use of the
+  initstate() function, which seeds the lagged Fibonacci generator made
+  available by the random() function. It does this in an independent
+  sequencing fashion such that each calling process will have an id-dependent
+  seeding. However, a seed can be provided to make this process reproducible;
+  otherwise the seeding is based on the id and the current time.
+
+  @param id        The id of the calling process.
+  @param seed      Either 0 to seed based on time or a positive integer to
+                   seed in a reproducible manner.
+  @return          A pointer to the array newly allocated for the lag table.
+  @Pre-Condition   id is a valid process id and seed is non-negative.
+  @Post-Condition  The random number generator has been seeded in accordance
+                   with the calling process id: either in a reproducible
+                   manner thanks to a seed, or even more "randomly" by basing
+                   on the time.
 */
 char* init_random_state(int id, int seed) {
     char* state = malloc(LAG_TABLE_SIZE * sizeof(char));
@@ -91,18 +110,48 @@ char* init_random_state(int id, int seed) {
 
 
 /*
-  NOTE THE +1 to get [0,1)
+  A convenience function to generate a random number in the interval [0,1)
+  (from a uniform distribution). Note the half-open interval: this enables
+  convenient multiplication of the returned value by other values (for
+  example, taking the floor of multiplying by the length of the array, such
+  that no out of bounds value is generated). This is accomplished by dividing
+  by one greater than the largest possible value returned by random()
+  (RAND_MAX).
+
+  @return          A double in the range [0,1).
+  @Pre-Condition   As this function uses the random() function, the
+                   init_random_state() function should have already been
+                   called to seed the generator.
+  @Post-Condition  A random value has been returned.
 */
 double get_unif_random() {
     return (((double) random()) / (((long) RAND_MAX) + 1));
 }
 
 /*
+  This function implements the room assignment objective function,
+  calculating the "cost" of a given solution (assignments) for a given
+  incompatibility matrix. PLEASE NOTE: this is basically an implementation
+  of the summation given on page 41 of Professor Weiss' Chapter 8 Lecture
+  Notes.
 
+  @param assignments      An n-long array representing a solution in the form
+                          of an assigned room for each of the n students.
+  @param n                The number of students.
+  @param incompat_matrix  A doubly subscriptable n x n incompatibility matrix
+                          which is symmetric and contains values indicating
+                          the degree to which two students are incompatible.
+  @return                 The cost of the solution.
+  @Pre-Condition          assignments and incompat_matrix should be properly
+                          initialized in accordance with their semantics
+                          (i.e. no more than 2 students assigned to a room
+                          and incompatibility values where higher values
+                          indicate greater incompatibility).
+  @Post-Condition         The cost of the proposed solution has been returned.
 */
 double cost(int* assignments, int n, double** incompat_matrix) {
     int i, j; /* Loop counters */
-    double total = 0;
+    double total = 0; /* Cost accumulator */
     for(i = 0; i < n; i++) {
         for(j = 0; j < n; j++) {
             if((i != j) && (assignments[i] == assignments[j])) {
@@ -114,7 +163,20 @@ double cost(int* assignments, int n, double** incompat_matrix) {
 }
 
 /*
-
+  This function provides a starting point for the simulated annealing
+  algorithm - an initial solution (set of room assignments). It proceeds by
+  maintaining an occupancy array, tracking the number of students assigned to
+  each of the (n/2) rooms, and randomly selects a room for each student: if
+  the chosen room is already full, random selections are continuously made
+  until a room with a free slot is chosen.
+  @param assignments  An array of length n to be filled with random room
+                      assignments
+  @param n            The number of students (and length of assignments array)
+  @Pre-Condition      As this function uses the get_unif_random() function,
+                      init_random_state() should already have been called.
+                      Also, the memory for assignments should already have
+                      been allocated.
+  @Post-Condition     assignments has been filled with a random solution.
 */
 void random_solution(int* assignments, int n) {
 
@@ -146,7 +208,24 @@ void random_solution(int* assignments, int n) {
 }
 
 /*
-
+  This function manages the printing of the best solution found among the
+  num_p processes, along with the id of that process and the cost of the
+  solution. In short, ROOT assumes its solution is best and then polls all
+  other processes for the cost of their solutions to see if a better one has
+  been found; then all processes participate in a broadcast whereby ROOT
+  shares the id of the process with the best solution; that process is then
+  responsible for the final output (printing).
+  @param id             The id of the calling process
+  @param num_p          The total number of processes
+  @param n              The number of students
+  @param solution_cost  The cost of the last solution accepted by the
+                        calling process
+  @param assignments    The last solution accepted by the calling process
+  @Pre-Condition        room_asst_sim_anneal() should already have been run
+                        such that assignments is the last accepted solution
+                        by a process and solution_cost is its cost.
+  @Post-Condition       The process that has the best solution has printed
+                        its id, the solution cost, and the solution.
 */
 void print_best_solution(int id, int num_p, int n, double solution_cost,
     int* assignments) {
@@ -188,7 +267,27 @@ void print_best_solution(int id, int num_p, int n, double solution_cost,
 }
 
 /*
-  NOTE THAT THIS BASICALLY FOLLOWS FROM PAGE 43 IN LECTURE NOTES
+  PLEASE NOTE: This function is an implementation of the pseudocode given in
+  Listing 8.7 on page 43 in Chapter 8 of Professor Weiss' Lecture Notes.
+  This function implements the simulated annealing algorithm for solving an
+  instance of the room assignment problem, using the temperature decreasing
+  process proposed by Kirkpatrick et. al in their 1983 article "Optimization
+  by Simulated Annealing" (Science, New Series, Vol. 220, No. 4598. (May 13,
+  `983), pp. 671-680.)
+  @param id           The id of the calling process
+  @param seed         A value to be passed to init_random_state
+  @param n            The number of students
+  @param assignments  A pre-allocated array of length n
+  @incompat_matrix    A doubly subscriptable n x n incompatibility matrix
+                      which is symmetric and contains values indicating
+                      the degree to which two students are incompatible.
+  @solution_cost      Pointer to a double where the last solution cost
+                      should be recorded
+  @Pre-Condition      assignments should point to an array of length n and
+                      incompat_matrix should contain the contents of the
+                      incompatibility matrix read from a file
+  @Post-Condition     assignments contains the last accepted solution and
+                      solution_cost points to its cost
 */
 void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
     double** incompat_matrix, double* solution_cost) {
@@ -290,7 +389,36 @@ void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
 
 
 /*
-
+  This function handles reading of the BINARY file containing the
+  incompatibility matrix for the problem instance, allocating memory for a
+  solution array, the incompatibility matrix in contiguous memory and an
+  array of pointers offering simple doubly subscriptable [row][col] access
+  to the matrix. As all processes need the same matrix, it is shared in full
+  via a broadcast.
+  @param filename          The name of the BINARY file containing the
+                           incompatibility matrix (in the format output by
+                           the matrix2binary program provided by Professor
+                           Weiss).
+  @param id                The id of the calling process
+  @param num_p             The number of processes
+  @param n                 A pointer to an integer location where the number
+                           of students should be recorded
+  @param assignments       A pointer to the assignments pointer, which will
+                           be updated to point to memory newly allocated for
+                           an integer array of length n
+  @param incompat_storage  A pointer to the incompatibility matrix linear
+                           storage pointer, which will be updated to point to
+                           a contiguous block of memory for the n x n doubles
+  @param incompat_matrix   A pointer to the incompatibility matrix row
+                           pointers array pointer, which will be updated to
+                           point to an array of pointers, each pointing to the
+                           start of a new row in the incompat_storage memory
+  @Pre-Condition           filename contains a proper filename
+  @Post-Condition          Memory has been allocated for assignments;
+                           incompat_storage points to a pointer to the matrix
+                           stored in contiguous memory; incompat_matrix points
+                           to an array of double pointers, each of which
+                           points to one of the n rows in incompat_storage
 */
 void read_and_distribute_incompat_matrix(char* filename, int id, int num_p,
     int* n, int** assignments, double** incompat_storage,

@@ -43,7 +43,7 @@
 #define ROOT 0 /* Good practice borrowed from estimate_pi.c by Prof. Weiss */
 #define MALLOC_ERROR 1
 #define DEBUG 0
-#define LAG_TABLE_SIZE 64
+#define LAG_TABLE_SIZE 1000
 
 /*
   PLEASE NOTE: this function is borrowed from page 488 of Parallel Programming
@@ -74,7 +74,7 @@ void terminate(int id, char* error_message) {
   PLEASE NOTE: This function is inspired by the init_random function provided
   as an example by Professor Weiss.
 */
-void init_random_state(int id, int seed) {
+char* init_random_state(int id, int seed) {
     char* state = malloc(LAG_TABLE_SIZE * sizeof(char));
     if(NULL == state) {
         MPI_Abort(MPI_COMM_WORLD, MALLOC_ERROR);
@@ -85,6 +85,8 @@ void init_random_state(int id, int seed) {
     } else {
        initstate(((id + 1) * time(NULL)), state, LAG_TABLE_SIZE);
     }
+
+    return state;
 }
 
 
@@ -202,9 +204,10 @@ void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
     int temp_room; /* Swap variable for room assignments */
     double delta; /* Change in cost */
     double new_cost; /* Cost of new solution */
+    char* random_state; /* Array for initializing RNG */
 
     /* Initialize random number generator */
-    init_random_state(id, seed);
+    random_state = init_random_state(id, seed);
     if(DEBUG) {
         printf("id: %d, random number: %ld\n", id, random());
     }
@@ -281,6 +284,8 @@ void room_asst_sim_anneal(int id, int seed, int n, int* assignments,
         }
         printf("\n");
     }
+
+    free(random_state);
 }
 
 

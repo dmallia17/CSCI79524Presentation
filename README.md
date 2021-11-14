@@ -1,4 +1,4 @@
-# CSCI79524 Presentation
+# CSCI79524 Presentation: The Room Assignment Problem
 **Author: Daniel Mallia**
 
 This repository contains the source code for an implementation of the

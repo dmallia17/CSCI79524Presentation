@@ -46,7 +46,7 @@
 #define ROOT 0 /* Good practice borrowed from estimate_pi.c by Prof. Weiss */
 #define MALLOC_ERROR 1
 #define DEBUG 0
-#define LAG_TABLE_SIZE 1000
+#define LAG_TABLE_SIZE 256
 
 /*
   PLEASE NOTE: this function is borrowed from page 488 of Parallel Programming

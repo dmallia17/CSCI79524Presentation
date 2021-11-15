@@ -21,4 +21,6 @@ nth, the second with the (n-1), etc. To run the script use:
 This script was used to generate a couple of sample matrices, provided in the
 test_incompatibility_matrices directory.
 
+Link to presentation slides:  
+https://docs.google.com/presentation/d/1SFpWA3fTlRXkiN2g2BWTJEIuIYJ7UZVQ9S0iq9ETz60/edit?usp=sharing
 
